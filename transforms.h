@@ -1,13 +1,12 @@
 #ifndef __TRANSFORMS_H__
 #define __TRANSFORMS_H__
 
+
 #include <vector>
-#include <map>
 #include <tuple>
 #include <algorithm>
 #include <list>
 
-#include <iostream>
 
 namespace transforms {
 
@@ -89,6 +88,45 @@ namespace transforms {
     }
   }
 
+
+  // Non-dictionary building mtf-transform working with bytes.
+  // Assumes dictionary that is simply [0, 1, 2, .., 255]
+  // So allows encoding an arbitrary string of bytes
+  void nd_mtf(unsigned char *v, int c) {
+    // while it is non-dictionary building, in the sense that it doesn't construct a dict from data
+    // we still need the dictionary
+    std::list<unsigned char> dict;
+    for (int i = 0x0; i < 0x100; ++i)
+      dict.emplace_back(i);
+
+    for (int i = 0; i < c; ++i) {
+      int pos = 0;
+      auto it = dict.begin();
+      for (; *it != *v; ++it, ++pos)
+        ;
+      *v = pos;
+      dict.push_front(*it);
+      dict.erase(it);
+      ++v;
+    }
+  }
+
+  void nd_imtf(unsigned char*v, int c) {
+    std::list<unsigned char> dict;
+    for (int i = 0x0; i < 0x100; ++i)
+      dict.emplace_back(i);
+
+    for (int i = 0; i < c; ++i) {
+      unsigned char pos = 0;
+      auto it = dict.begin();
+      for (; pos < *v; ++it, ++pos)
+        ;
+      *v = *it;
+      dict.push_front(*it);
+      dict.erase(it);
+      ++v;
+    }
+  }
 
 } // end namespace transforms
 
