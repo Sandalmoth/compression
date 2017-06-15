@@ -11,48 +11,42 @@
 
 namespace transforms {
 
-  // Burrows-Wheeler transform
   template <typename Titer>
   Titer bwt(Titer first, Titer last) {
-
     typedef typename std::remove_reference<decltype(*std::declval<Titer>())>::type value_type;
-    typedef std::tuple<value_type, value_type, bool> rotation;
+    typedef std::pair<value_type, bool> value_end;
 
-    // We really only care about the first character for sorting and the last for the bwt
-    // We also need to remember where the last character is
-    std::vector<rotation> rotations;
+    std::vector<value_end> v;
+    for (auto it = first; it != last; ++it) {
+      v.emplace_back(std::make_pair(*it, false));
+    }
+    v.back().second = true;
 
-    // Build all rotations
-    auto fc = first;
-    auto lc = last;
-
-    --lc;
-    rotations.emplace_back(rotation(*fc, *lc, true));
-    fc = last;
-    --fc;
-
-    for (; fc != first; --fc) {
-      --lc;
-      rotations.emplace_back(rotation(*fc, *lc, false));
+    std::vector<std::vector<value_end> > rotations;
+    for (size_t i = 0; i < v.size(); ++i) {
+      std::rotate(v.begin(), ++v.begin(), v.end());
+      rotations.emplace_back(v);
     }
 
     std::sort(rotations.begin(), rotations.end()
-         , [](auto &a, auto &b) {
-           return std::get<0>(a) < std::get<0>(b);
-         });
+              , [](auto &a, auto &b) {
+                return a < b;
+              });
 
-    // Update the given list
+    std::vector<value_end> t;
     for (auto r: rotations) {
-      (*first) = std::get<1>(r);
+      t.emplace_back(r.back());
+    }
+
+    auto last_character = first;
+    for (auto it = t.begin(); it != t.end(); ++it) {
+      *first = it->first;
+      if (it->second)
+        last_character = first;
       ++first;
     }
 
-    // Find location of ending character.
-    auto it = rotations.end();
-    --it;
-    for (; !std::get<2>(*it); --it, --last)
-      ;
-    return --last;
+    return last_character;
   }
 
 
@@ -60,55 +54,35 @@ namespace transforms {
   template <typename Titer>
   void ibwt(Titer first, Titer last, Titer end) {
     typedef typename std::remove_reference<decltype(*std::declval<Titer>())>::type value_type;
-    typedef std::pair<bool, std::list<value_type>> full_rotation;
-    std::vector<full_rotation> matrix;
+    typedef std::pair<value_type, bool> value_end;
+    std::vector<std::list<value_end>> matrix;
 
     // Build last column of matrix with end char marker
     for (auto it = first; it != last; ++it) {
-      matrix.push_back(std::make_pair(false, std::list<value_type>{*it}));
-      if (it == end) {
-        matrix.back().first = true;
-      }
+      matrix.push_back(std::list<value_end>{std::make_pair(*it, (it == end))});
     }
 
     // complete matrix
     auto it_c = first;
     ++it_c;
     for (; it_c != last; ++it_c) {
-      for (auto m: matrix) {
-        for (auto x: m.second) {
-          std::cout << x << ' ';
-        }
-        if (m.first) std::cout << '*';
-        std::cout << std::endl;
-      }
-      std::sort(matrix.begin(), matrix.end()
+      std::stable_sort(matrix.begin(), matrix.end()
                 , [](auto &a, auto &b) {
-                  auto ait = a.second.begin();
-                  auto bit = b.second.begin();
-                  for (; ait != a.second.end(); ++ait, ++bit) {
-                    if (*ait < *bit) {
-                      return true;
-                    }
-                    if ((*ait == *bit) && (*ait = --a.second.end())) {
-                      if (a.first)
-                        return true;
-                    }
-                  }
-                  return false;
+                  return a < b;
                 });
+
       auto mit = matrix.begin();
       auto rit = first;
       for (; rit != last; ++rit, ++mit) {
-        mit->second.push_front(*rit);
+        mit->push_front(std::make_pair(*rit, (rit == end)));
       }
     }
 
     // copy row with ending marker
     for (auto m: matrix) {
-      if (m.first) {
-        for(auto x: m.second) {
-          *first = x;
+      if (m.back().second) {
+        for(auto x: m) {
+          *first = x.first;
           ++first;
         }
       }
