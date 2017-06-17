@@ -9,10 +9,19 @@
 
 #include <iostream>
 
+
+// useful debug printing
 std::string toBinary(int n)
 {
   std::string r;
   while(n!=0) {r=(n%2==0 ?"0":"1")+r; n/=2;}
+  return r;
+}
+
+
+template <typename T>
+std::vector<T> reverse(const std::vector<T> &v) {
+  std::vector<T> r(v.rbegin(), v.rend());
   return r;
 }
 
@@ -112,6 +121,7 @@ namespace huff {
           if (cn->parent == nullptr)
             break;
         }
+        huff = reverse(huff);
         huffs[n.symbol] = huff;
       }
     }
@@ -139,7 +149,7 @@ namespace huff {
     unsigned char w = 0; // workbyte
     int outpos = 0;
     out = reinterpret_cast<unsigned char*>(malloc(outsize)); // who cares about checking for NULL
-    for (int i = 0; i < c; ++i) {
+    for (int i = 0; i <= c; ++i) {
       // grab the huffman code;
       auto h = huffs[v[i]];
       for (auto b: h) {
@@ -148,17 +158,70 @@ namespace huff {
         // is that even a thing that can happen?
         w = w | b;
         ++bitpos;
-        std::cout << toBinary(w) << std::endl;
+        // std::cout << toBinary(w) << std::endl;
         if (bitpos == 8) {
           out[outpos] = w;
           ++outpos;
           w = 0;
+          bitpos = 0;
         }
       }
     }
+    out[outpos] = w;
     // who the fuck knows if this works or not. we'll see tomorrow when I make the decoder.
     // my primary concern is that the huffman code making is wrong.
+    // Tomorrow me: I had to reverse the huffman codes. now they seem correct.
     return huffs;
+  }
+
+
+  std::vector<unsigned char> decode(unsigned char *data, int length, int n_symbols, std::map<unsigned char, std::vector<bool>> huffs) {
+    // we need a map from huffman codes to bytes
+    std::map<std::vector<bool>, unsigned char> ihuffs;
+    for (auto h: huffs) {
+      ihuffs[h.second] = h.first;
+    }
+
+    std::vector<unsigned char> decomp;
+
+    // read off input, one bit at a time, while looking for huffman codes
+    std::vector<bool> wh; // working huff
+    int k = 0; // how many symbols have we uncovered
+    for (int i = 0; i < length; ++i) {
+      unsigned char c = data[i];
+      std::cout << "workchar: " << toBinary(static_cast<int>(c)) << '\t' << static_cast<int>(c) << std::endl;
+      for (int j = 0; j < 8; ++j) {
+        // mask off first bit
+        bool bit = (0b10000000 & c);
+        wh.push_back(bit);
+        c = c << 1;
+        // do we have a huffman code?
+        auto it = ihuffs.find(wh);
+        if (it != ihuffs.end()) {
+          std::cout << "found: ";
+          for (auto zz: wh) {
+            std::cout << (zz ? '1' : '0');
+          }
+          std::cout << std::endl;
+          decomp.push_back(it->second);
+          ++k;
+          if (k > n_symbols) {
+            std::cout << k << '=' << n_symbols << " ALL SYMBOLS ENCOUNTERED" << std::endl;
+            // thinly veiled goto incoming:
+            j = 8;
+            i = length;
+            // hehe
+          }
+          wh.clear();
+        }
+      }
+    }
+
+    for (auto x: decomp) std::cout << x << ' ';
+    std::cout << std::endl;
+    return decomp; // what the hell warning level all. why doesnt' it stop me from not returning anything
+    // oops. wall is not active. :/
+    // even still. why does it compile without a return
   }
 
 
